@@ -5,9 +5,27 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ${{ secrets.DATABASE_USERNAME }}
+          POSTGRES_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          POSTGRES_DB: myapp_test
+        options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       # Checkout code
       - name: Checkout code
@@ -26,10 +44,20 @@ jobs:
           gem install bundler
           bundle install
 
-      # Run Rails migrations
-      - name: Run migrations
+      # Set environment variables for database connection
+      - name: Set database connection environment variables
+        run: |
+          echo "DATABASE_URL=postgres://${{ secrets.DATABASE_USERNAME }}:${{ secrets.DATABASE_PASSWORD }}@localhost:5432/myapp_test" >> $GITHUB_ENV
+          echo "RAILS_ENV=test" >> $GITHUB_ENV
+
+      # Create the database
+      - name: Create the database
         run: |
           bin/rails db:create
+
+      # Run migrations
+      - name: Run migrations
+        run: |
           bin/rails db:migrate
 
       # Run Tests
